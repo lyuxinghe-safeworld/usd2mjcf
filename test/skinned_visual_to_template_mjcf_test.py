@@ -67,6 +67,10 @@ def main() -> None:
     parser.add_argument("--visual-usd", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--keep-template-visuals", action="store_true")
+    parser.add_argument("--emit-protomotions-bundle", action="store_true")
+    parser.add_argument("--robot-name", default=None)
+    parser.add_argument("--protomotions-root", default=None)
+    parser.add_argument("--protomotions-python", default=None)
     args = parser.parse_args()
 
     output_xml, report = convert_skinned_visual_to_template_mjcf(
@@ -76,12 +80,21 @@ def main() -> None:
         output_dir=Path(args.output_dir),
         joint_to_body_mapping=DEFAULT_BIPED_TO_SMPL_MAPPING,
         keep_template_visuals=args.keep_template_visuals,
+        emit_protomotions_bundle=args.emit_protomotions_bundle,
+        robot_name=args.robot_name,
+        protomotions_root=None if args.protomotions_root is None else Path(args.protomotions_root),
+        protomotions_python=args.protomotions_python,
     )
 
     print(f"output_xml={output_xml}")
     print(f"body_names={report.body_names}")
     print(f"joint_names={report.joint_names}")
     print(f"motor_names={report.motor_names}")
+    if report.protomotions_bundle_dir is not None:
+        print(f"protomotions_bundle_dir={report.protomotions_bundle_dir}")
+        print(f"protomotions_mjcf_path={report.protomotions_mjcf_path}")
+        print(f"protomotions_usd_path={report.protomotions_usd_path}")
+        print(f"protomotions_manifest_path={report.protomotions_manifest_path}")
 
 
 if __name__ == "__main__":

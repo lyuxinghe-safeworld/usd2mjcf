@@ -12,6 +12,9 @@ from lightwheel.srl.from_usd.skinned_mesh_partition import (
     load_skinned_mesh_data,
     partition_triangles_by_body,
 )
+from lightwheel.srl.from_usd.protomotions_bundle_export import (
+    export_protomotions_bundle,
+)
 from lightwheel.srl.from_usd.template_mjcf_visual_swap import (
     VisualGeomSpec,
     inject_visual_geoms,
@@ -170,8 +173,13 @@ class ConversionReport:
     joint_names: list[str]
     motor_names: list[str]
     exported_triangle_count_by_body: dict[str, int]
+    resolved_joint_to_body_mapping: dict[str, str]
     forced_assignment_face_count: int
     empty_body_warnings: list[str]
+    protomotions_bundle_dir: Path | None = None
+    protomotions_mjcf_path: Path | None = None
+    protomotions_usd_path: Path | None = None
+    protomotions_manifest_path: Path | None = None
 
 
 def convert_skinned_visual_to_template_mjcf(
@@ -181,14 +189,24 @@ def convert_skinned_visual_to_template_mjcf(
     output_dir: Path,
     joint_to_body_mapping: dict[str, str],
     keep_template_visuals: bool = False,
+    emit_protomotions_bundle: bool = False,
+    robot_name: str | None = None,
+    protomotions_root: Path | None = None,
+    protomotions_python: str | None = None,
 ) -> tuple[Path, ConversionReport]:
-    del template_usd_path
+    if emit_protomotions_bundle and robot_name is None:
+        raise ValueError("robot_name is required when emit_protomotions_bundle=True.")
+    if emit_protomotions_bundle and protomotions_root is None:
+        raise ValueError("protomotions_root is required when emit_protomotions_bundle=True.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     visuals_dir = output_dir / "visuals"
     visuals_dir.mkdir(parents=True, exist_ok=True)
 
     template_model = load_template_mjcf(template_mjcf_path)
+    template_body_names = template_model.body_names.copy()
+    template_joint_names = template_model.joint_names.copy()
+    template_motor_names = template_model.motor_names.copy()
     mesh = load_skinned_mesh_data(visual_usd_path, mesh_path="/World/biped_demo_meters/Body_Mesh")
     resolved_mapping = _resolve_joint_to_body_mapping(mesh.joint_names, joint_to_body_mapping)
     partitioned = partition_triangles_by_body(mesh, resolved_mapping)
@@ -224,12 +242,43 @@ def convert_skinned_visual_to_template_mjcf(
     ET.indent(template_model.tree, space="  ")
     template_model.tree.write(output_xml, encoding="utf-8", xml_declaration=True)
 
+    if template_model.body_names != template_body_names:
+        raise RuntimeError("Template body ordering changed during visual swap conversion.")
+    if template_model.joint_names != template_joint_names:
+        raise RuntimeError("Template joint ordering changed during visual swap conversion.")
+    if template_model.motor_names != template_motor_names:
+        raise RuntimeError("Template motor ordering changed during visual swap conversion.")
+
     report = ConversionReport(
         body_names=template_model.body_names,
         joint_names=template_model.joint_names,
         motor_names=template_model.motor_names,
         exported_triangle_count_by_body=triangle_counts,
+        resolved_joint_to_body_mapping=resolved_mapping,
         forced_assignment_face_count=0,
         empty_body_warnings=[],
     )
+
+    if emit_protomotions_bundle:
+        bundle_paths = export_protomotions_bundle(
+            output_dir=output_dir,
+            output_mjcf_path=output_xml,
+            visuals_dir=visuals_dir,
+            visual_usd_path=visual_usd_path,
+            template_mjcf_path=template_mjcf_path,
+            template_usd_path=template_usd_path,
+            protomotions_root=protomotions_root,
+            robot_name=robot_name,
+            body_names=report.body_names,
+            joint_names=report.joint_names,
+            motor_names=report.motor_names,
+            triangle_counts=report.exported_triangle_count_by_body,
+            joint_to_body_mapping=report.resolved_joint_to_body_mapping,
+            protomotions_python=protomotions_python,
+        )
+        report.protomotions_bundle_dir = bundle_paths.bundle_dir
+        report.protomotions_mjcf_path = bundle_paths.bundled_mjcf_path
+        report.protomotions_usd_path = bundle_paths.usd_path
+        report.protomotions_manifest_path = bundle_paths.manifest_path
+
     return output_xml, report
