@@ -17,3 +17,5 @@ __version__ = _get_version()
 
 # Remove `_get_version` so it is not added as an attribute
 del _get_version
+
+from .skinned_visual_to_template_mjcf import convert_skinned_visual_to_template_mjcf
