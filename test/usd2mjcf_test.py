@@ -1,6 +1,13 @@
 import argparse
-from lightwheel.srl.from_usd.to_mjcf import UsdToMjcf
 import os
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from lightwheel.srl.from_usd.to_mjcf import UsdToMjcf
 
 def main():
     parser = argparse.ArgumentParser(description="Convert USD to MJCF")
@@ -31,5 +38,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 

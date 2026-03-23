@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -265,3 +267,15 @@ def test_output_dimensions_match_template_when_mujoco_available(tmp_path: Path):
     assert output_model.nq == template_model.nq
     assert output_model.nv == template_model.nv
     assert output_model.nu == template_model.nu
+
+
+def test_cli_help_runs_from_repo_root():
+    cli_path = Path("test/skinned_visual_to_template_mjcf_test.py")
+    completed = subprocess.run(
+        [sys.executable, cli_path.as_posix(), "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
