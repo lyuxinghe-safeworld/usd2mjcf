@@ -3,3 +3,4 @@ scipy
 usd-core>=25.5
 trimesh
 coacd
+pytest
