@@ -1,11 +1,15 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from lightwheel.srl.from_usd.skinned_mesh_partition import (
+    BakedMeshChunk,
     FaceMaterialRange,
     SkinMeshData,
+    bake_chunk_to_body_frame,
     collapse_joint_mapping_to_parent,
+    load_skinned_mesh_data,
     partition_triangles_by_body,
 )
 from lightwheel.srl.from_usd.template_mjcf_visual_swap import (
@@ -152,3 +156,33 @@ def test_collapse_unmapped_joint_to_nearest_mapped_parent():
     )
 
     assert collapsed == "L_Hip"
+
+
+def test_bake_chunk_to_body_frame_transforms_points_into_target_local_frame():
+    chunk = BakedMeshChunk(
+        body_name="Pelvis",
+        material_name="Body",
+        points=np.array([[2.0, 0.0, 0.0]], dtype=float),
+        face_vertex_counts=np.array([3], dtype=int),
+        face_vertex_indices=np.array([0, 0, 0], dtype=int),
+        normals=None,
+        uvs=None,
+    )
+    target_world = np.eye(4)
+    target_world[0, 3] = 1.0
+
+    baked = bake_chunk_to_body_frame(chunk, target_world)
+
+    assert baked.points.tolist() == [[1.0, 0.0, 0.0]]
+
+
+def test_load_skinned_mesh_data_reads_biped_usd_real_asset():
+    usd_path = Path("/home/lyuxinghe/code/Characters/Biped_Setup.usd")
+    if not usd_path.exists():
+        pytest.skip("Real asset not available in this environment.")
+
+    mesh = load_skinned_mesh_data(usd_path, mesh_path="/World/biped_demo_meters/Body_Mesh")
+
+    assert mesh.points.shape[0] > 0
+    assert mesh.face_vertex_counts.shape[0] > 0
+    assert len(mesh.joint_names) == 81
