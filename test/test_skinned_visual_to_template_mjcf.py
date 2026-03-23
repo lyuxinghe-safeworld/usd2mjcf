@@ -3,6 +3,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from lightwheel.srl.from_usd.skinned_visual_to_template_mjcf import (
+    convert_skinned_visual_to_template_mjcf,
+)
 from lightwheel.srl.from_usd.skinned_mesh_partition import (
     BakedMeshChunk,
     FaceMaterialRange,
@@ -186,3 +189,79 @@ def test_load_skinned_mesh_data_reads_biped_usd_real_asset():
     assert mesh.points.shape[0] > 0
     assert mesh.face_vertex_counts.shape[0] > 0
     assert len(mesh.joint_names) == 81
+
+
+def test_end_to_end_conversion_preserves_template_joint_and_motor_order(
+    tmp_path: Path,
+):
+    visual_usd_path = Path("/home/lyuxinghe/code/Characters/Biped_Setup.usd")
+    if not visual_usd_path.exists():
+        pytest.skip("Real asset not available in this environment.")
+
+    template_path = tmp_path / "template.xml"
+    template_path.write_text(
+        """
+        <mujoco model="humanoid">
+          <asset/>
+          <worldbody>
+            <body name="Pelvis">
+              <freejoint name="Pelvis"/>
+              <geom name="pelvis_geom" type="box" size="1 1 1" density="1000"/>
+            </body>
+          </worldbody>
+          <actuator/>
+        </mujoco>
+        """.strip()
+    )
+
+    output_xml, report = convert_skinned_visual_to_template_mjcf(
+        template_mjcf_path=template_path,
+        template_usd_path=None,
+        visual_usd_path=visual_usd_path,
+        output_dir=tmp_path / "out",
+        joint_to_body_mapping={"Root": "Pelvis", "Pelvis": "Pelvis"},
+        keep_template_visuals=False,
+    )
+
+    assert output_xml.exists()
+    assert report.body_names == ["Pelvis"]
+    assert "Pelvis" in report.exported_triangle_count_by_body
+
+
+def test_output_dimensions_match_template_when_mujoco_available(tmp_path: Path):
+    mujoco = pytest.importorskip("mujoco")
+    visual_usd_path = Path("/home/lyuxinghe/code/Characters/Biped_Setup.usd")
+    if not visual_usd_path.exists():
+        pytest.skip("Real asset not available in this environment.")
+
+    template_path = tmp_path / "template.xml"
+    template_path.write_text(
+        """
+        <mujoco model="humanoid">
+          <asset/>
+          <worldbody>
+            <body name="Pelvis">
+              <freejoint name="Pelvis"/>
+              <geom name="pelvis_geom" type="box" size="1 1 1" density="1000"/>
+            </body>
+          </worldbody>
+          <actuator/>
+        </mujoco>
+        """.strip()
+    )
+
+    output_xml, _ = convert_skinned_visual_to_template_mjcf(
+        template_mjcf_path=template_path,
+        template_usd_path=None,
+        visual_usd_path=visual_usd_path,
+        output_dir=tmp_path / "out",
+        joint_to_body_mapping={"Root": "Pelvis", "Pelvis": "Pelvis"},
+        keep_template_visuals=False,
+    )
+
+    template_model = mujoco.MjModel.from_xml_path(template_path.as_posix())
+    output_model = mujoco.MjModel.from_xml_path(output_xml.as_posix())
+
+    assert output_model.nq == template_model.nq
+    assert output_model.nv == template_model.nv
+    assert output_model.nu == template_model.nu
